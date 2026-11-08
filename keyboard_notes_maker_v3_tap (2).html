@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keyboard notes maker v2 (C=1 to B=12)</title>
+<style>
+  body{font-family:"Noto Sans Tamil","Nirmala UI","Latha","Segoe UI",Arial,sans-serif;margin:0;padding:16px;background:#fafaf7;color:#2c2c2a;max-width:920px;margin-inline:auto}
+  h1{font-size:20px;font-weight:600;margin:0 0 4px}
+  p.hint{font-size:14px;color:#5f5e5a;line-height:1.7;margin:6px 0}
+  label{display:block;font-size:14px;font-weight:600;margin:12px 0 4px}
+  input[type=text],textarea{width:100%;box-sizing:border-box;font-size:16px;padding:10px;border:1.5px solid #b4b2a9;border-radius:8px;font-family:inherit;background:#fff;color:#2c2c2a}
+  textarea{min-height:150px;line-height:1.6}
+  textarea.bad{border-color:#a32d2d;background:#fff8f8}
+  textarea.good{border-color:#0f6e56}
+  button{font-size:15px;padding:9px 16px;border:1px solid #0f6e56;background:#0f6e56;color:#fff;border-radius:8px;cursor:pointer;font-family:inherit}
+  button.sec{background:#fff;color:#0f6e56}
+  button.danger{background:#fff;color:#a32d2d;border-color:#a32d2d}
+  button.small{font-size:14px;padding:4px 10px;min-width:38px}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center}
+  .card{background:#fff;border:1px solid #d3d1c7;border-radius:12px;padding:12px;margin:14px 0}
+  .card.err{border-color:#a32d2d}
+  .card h3{font-size:15px;margin:0 0 8px;font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:2px 8px;border-radius:10px;font-weight:600}
+  .badge.ok{background:#e1f5ee;color:#085041}
+  .badge.warn{background:#faeeda;color:#633806}
+  .badge.error{background:#fceaea;color:#791f1f}
+  canvas{width:100%;height:auto;display:block;border:1px solid #e5e3da;border-radius:8px;margin-top:8px}
+  ul.msgs{list-style:none;padding:0;margin:8px 0}
+  ul.msgs li{font-size:14px;line-height:1.6;padding:6px 10px;border-radius:8px;margin:4px 0}
+  ul.msgs li.error{background:#fceaea;color:#791f1f}
+  ul.msgs li.warn{background:#faeeda;color:#633806}
+  ul.msgs li.ok{background:#e1f5ee;color:#085041}
+  ul.msgs li .ta{display:block;font-size:13px;opacity:.9}
+  .slots{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+  .slot{display:flex;flex-direction:column;gap:3px;align-items:stretch;min-width:40px}
+  .chip{padding:3px 6px;border-radius:6px;border:1px solid #0f6e56;background:#e1f5ee;text-align:center;font-size:14px;min-height:20px}
+  .chip.n{background:#fff;font-weight:600}
+  .chip.miss{border-color:#a32d2d;background:#fceaea;color:#791f1f}
+  .summary{font-size:15px;font-weight:600;margin:10px 0}
+  .summary.ok{color:#085041}
+  .summary.bad{color:#a32d2d}
+  #fixmsg{font-size:14px;color:#085041}
+  #fixmsg.bad{color:#a32d2d;font-weight:600}
+  .follow{position:sticky;top:0;z-index:5;background:#fafaf7;border:1px solid #b4b2a9;border-radius:10px;padding:8px 10px;margin:10px 0}
+  .follow .row{margin:6px 0}
+  .follow label.inl{display:flex;gap:6px;align-items:center;margin:0;font-weight:400;font-size:14px}
+  #fstatus{font-size:14px;line-height:1.6;color:#2c2c2a}
+  #meter{display:inline-block;width:110px;height:10px;border:1px solid #b4b2a9;border-radius:6px;overflow:hidden;background:#fff;vertical-align:middle}
+  #meterfill{display:block;height:100%;width:0;background:#0f6e56}
+  canvas.pick{cursor:pointer}
+</style>
+</head>
+<body>
+<h1>Keyboard notes maker v2</h1>
+<p class="hint">Fixed numbering: C=1, C♯=2, D=3, D♯=4, E=5, F=6, F♯=7, G=8, G♯=9, A=10, A♯=11, B=12</p>
+
+<label for="title">Title (optional)</label>
+<input type="text" id="title">
+
+<label for="src">Lines: words | notes (one line per row)</label>
+<textarea id="src" spellcheck="false"></textarea>
+
+<div class="row" aria-label="Quick insert">
+  <span style="font-size:14px">Insert:</span>
+  <button class="sec small" data-ins="| " title="Separator between words and notes">|</button>
+  <button class="sec small" data-ins=" / " title="Separator between the notes of different words">/</button>
+  <button class="sec small" data-ins="-" title="Join notes of one word, like C-C">C-C</button>
+  <button class="sec small" data-ins="&#9839;" title="Sharp">♯</button>
+  <button class="sec small" data-ins="&#9837;" title="Flat">♭</button>
+  <button class="sec small" data-ins=" - " title="Rest or held note">-</button>
+</div>
+
+<p class="hint">
+<b>Format:</b> words (spaces between) <b>|</b> notes (spaces between). Example: <code>Twin kle twin kle | C C G G</code><br>
+<b>One word with several notes:</b> write that word's notes together with no space (<code>CC</code>) or with a hyphen (<code>C-C</code>). Different words are separated by a space. Example: <code>Twinkle twinkle little star | CC GG AA G</code> or <code>Twinkle twinkle little star | C-C G-G A-A G</code>. Without any of these, each word gets one note. (The older way still works: a <b>/</b> between the notes of each word.)<br>
+Sharp: <b>F#</b> or <b>F♯</b> · Flat: <b>Bb</b> or <b>B♭</b> · Rest: <b>-</b> · High note: <b>C'</b> · Low note: <b>G,</b><br>
+Only letters <b>A to G</b> are accepted. Do not type numbers or sargam letters; numbers are made for you.
+</p>
+
+<div class="row">
+  <button id="go">Make images</button>
+  <button id="fix" class="sec">Auto-fix spacing and symbols</button>
+  <button id="all" class="sec">Download all valid images</button>
+  <button id="example" class="sec">Load example</button>
+  <button id="clear" class="danger">Clear</button>
+  <button id="undo" class="sec" hidden>Undo clear</button>
+  <button id="save" class="sec">Download JSON</button>
+  <button id="load" class="sec">Upload JSON</button>
+  <input type="file" id="file" accept=".json,application/json" hidden>
+</div>
+<div id="fixmsg" role="status" aria-live="polite"></div>
+<div id="follow" class="follow">
+  <div class="row">
+    <button id="listen">Start listening</button>
+    <button id="stopl" class="sec" disabled>Stop</button>
+    <button id="restart" class="sec">Restart</button>
+    <button id="skip" class="sec">Skip note</button>
+  </div>
+  <div class="row">
+    <label class="inl"><input type="checkbox" id="ahead"> Allow skipping ahead (up to 3 notes)</label>
+    <label class="inl">Sensitivity <input type="range" id="sens" min="1" max="100" value="60"></label>
+    <span id="meter" title="Microphone level"><span id="meterfill"></span></span>
+  </div>
+  <div class="row" id="tapwrap">
+    <b style="font-size:14px">No microphone? Tap the note you played (மைக் இல்லையா? வாசித்த note-ஐத் தொடுங்கள்):</b>
+  </div>
+  <div class="row" id="tappad"></div>
+  <div id="fstatus" role="status" aria-live="polite"></div>
+  <p class="hint" style="margin:4px 0 0">Play one note at a time on a keyboard or any instrument near the microphone. The page marks each correct note and scrolls to it. Octave does not matter. You can also click any note box to jump there. (வாசிக்கும் note-ஐ page தானாகக் குறித்து scroll செய்யும்.)</p>
+</div>
+<div id="summary" class="summary" role="status" aria-live="polite"></div>
+<div id="out"></div>
+
+<script>
+(function(){
+  var FONT = '"Noto Sans Tamil","Nirmala UI","Latha","Segoe UI","Helvetica Neue",Arial,sans-serif';
+  var BASE = {C:1,D:3,E:5,F:6,G:8,A:10,B:12};
+  var MAXSLOTS = 20;
+  var EXAMPLE = 'Twin kle twin kle lit tle star | C C G G A A G\nHow I won der what you are | G F F E E D D C';
+
+  function msg(lvl, en, ta){ return {lvl:lvl, en:en, ta:ta||''}; }
+
+  function hintFor(tok){
+    if(/^[a-gA-G]/.test(tok)){
+      var rest = tok.slice(1), acc = '';
+      if(/[#♯]/.test(rest)) acc = '#';
+      else if(/^[b♭]/.test(rest)) acc = 'b';
+      var s = tok[0].toUpperCase() + acc;
+      if(s !== tok) return 'Did you mean "' + s + '"?';
+      return '';
+    }
+    if(/^[SRMPNsrmpn][#]?\d?$/.test(tok)) return 'This looks like sargam. Type Western letters A to G instead.';
+    if(/^\d+$/.test(tok)) return 'Do not type numbers. Type note letters A to G; the numbers are made for you.';
+    return 'Use A to G, with optional # or b (example: F# or Bb).';
+  }
+
+  function parseNote(tok){
+    if(/^[-_~.]$/.test(tok)) return {rest:true, label:'-', num:null, oct:''};
+    var m = tok.match(/^([A-Ga-g])([#♯]|b|♭)?(['’,]*)$/);
+    if(!m) return {err:true, tok:tok, label:tok, num:null, oct:'', hint:hintFor(tok)};
+    var Lt = m[1].toUpperCase(), acc = m[2] || '', n = BASE[Lt], shown = Lt;
+    if(acc === '#' || acc === '♯'){ n += 1; shown += '♯'; }
+    else if(acc === 'b' || acc === '♭'){ n -= 1; shown += '♭'; }
+    if(n > 12) n -= 12;
+    if(n < 1) n += 12;
+    var hi = (m[3].match(/['’]/g) || []).length;
+    var lo = (m[3].match(/,/g) || []).length;
+    var oct = '';
+    if(hi) oct = new Array(hi+1).join('˙');
+    if(lo) oct = new Array(lo+1).join('•');
+    return {num:n, label:shown, oct:oct};
+  }
+
+  function parseToken(tok){
+    if(/^[-_~.]$/.test(tok)) return [parseNote(tok)];
+    var parts = tok.split('-');
+    var out = [];
+    for(var pi=0; pi<parts.length; pi++){
+      var part = parts[pi];
+      if(!part) return [{err:true, tok:tok, label:tok, num:null, oct:'', hint:'A hyphen needs a note on both sides, like C-C.'}];
+      var rest = part;
+      while(rest.length){
+        if(/^[_~.]/.test(rest)){ out.push({rest:true, label:'-', num:null, oct:''}); rest = rest.slice(1); continue; }
+        var m = rest.match(/^([A-Ga-g])([#\u266F]|b|\u266D)?(['\u2019,]*)/);
+        if(!m){
+          var hint = out.length ? ('In "' + tok + '" the part "' + rest + '" is not allowed. Use only A to G, # or b, and - between notes of one word.') : hintFor(tok);
+          return [{err:true, tok:tok, label:tok, num:null, oct:'', hint:hint}];
+        }
+        out.push(parseNote(m[0]));
+        rest = rest.slice(m[0].length);
+      }
+    }
+    return out;
+  }
+
+  function analyse(line){
+    var issues = [];
+    var bars = (line.match(/\|/g) || []).length;
+    var words = [], notesStr = line, hasPipe = false;
+    if(bars > 1) issues.push(msg('error', 'Only one "|" sign is allowed in a line. Remove the extra one.', 'ஒரு வரியில் ஒரு "|" மட்டும் போதும். கூடுதலானதை நீக்குங்கள்.'));
+    if(bars >= 1){
+      hasPipe = true;
+      var p = line.indexOf('|');
+      words = line.slice(0,p).trim().split(/\s+/).filter(Boolean);
+      notesStr = line.slice(p+1).replace(/\|/g,' ');
+    }
+    var grouped = notesStr.indexOf('/') >= 0;
+    var groups;
+    if(grouped){
+      groups = notesStr.split('/').map(function(g){ return g.trim().split(/\s+/).filter(Boolean); });
+    } else {
+      groups = notesStr.trim().split(/\s+/).filter(Boolean).map(function(t){ return [t]; });
+    }
+    var toks = [];
+    groups.forEach(function(g){ g.forEach(function(t){ toks.push(t); }); });
+    var parsed = groups.map(function(g){ var arr = []; g.forEach(function(t){ parseToken(t).forEach(function(x){ arr.push(x); }); }); return arr; });
+    var bad = [];
+    parsed.forEach(function(g){ g.forEach(function(n){ if(n.err) bad.push(n); }); });
+
+    if(!hasPipe && bad.length){
+      issues.push(msg('error', 'The "|" sign is missing. Write: words | notes (example: Twin kle | C C)', '"|" குறி இல்லை. இப்படி எழுதுங்கள்: சொற்கள் | notes'));
+      return {items:[], issues:issues, words:words, hasError:true};
+    }
+    if(!hasPipe) issues.push(msg('warn', 'No words given, so the boxes will have no words. To add words, write: words | notes', 'சொற்கள் இல்லை. சேர்க்க: சொற்கள் | notes'));
+    if(hasPipe && !words.length) issues.push(msg('warn', 'Nothing is written before "|", so the boxes will have no words.', '"|" க்கு முன் சொற்கள் இல்லை.'));
+    if(hasPipe && !toks.length) issues.push(msg('error', 'No notes after "|". Add notes like C D E.', '"|" க்குப் பின் notes இல்லை. C D E போல் சேர்க்கவும்.'));
+
+    if(grouped && toks.length){
+      var emptyGroup = groups.some(function(g){ return !g.length; });
+      if(emptyGroup) issues.push(msg('error', 'A group between "/" signs is empty. Remove the extra "/" or add notes for that word.', '"/" குறிகளுக்கு இடையில் notes இல்லை. கூடுதல் "/" ஐ நீக்கவும் அல்லது notes சேர்க்கவும்.'));
+    }
+
+    bad.forEach(function(b){
+      issues.push(msg('error', '"' + b.tok + '" is not a valid note. ' + b.hint, '"' + b.tok + '" சரியான note இல்லை. A முதல் G வரை மட்டும் பயன்படுத்தவும்.'));
+    });
+
+    var commaEnd = toks.filter(function(t){ return /,$/.test(t); }).length;
+    if(commaEnd >= 2) issues.push(msg('warn', 'Several notes end with a comma. A comma after a note means LOW note (G,). If you meant a separator, press "Auto-fix" or use spaces.', 'பல notes-க்குப் பின் comma உள்ளது. அது தாழ் note என்று பொருள். பிரிக்கவே என்றால் "Auto-fix" அழுத்துங்கள்.'));
+
+    if(hasPipe && words.length && groups.length && words.length !== groups.length){
+      if(words.length > groups.length){
+        var extra = words.slice(groups.length);
+        issues.push(msg('warn', 'Words: ' + words.length + ', Note groups: ' + groups.length + ' (one group = the notes of one word). ' + extra.length + ' word(s) have no notes: ' + extra.join(' ') + '. Add ' + extra.length + ' more group(s) of notes, or remove those words.', 'சொற்கள் அதிகம். இன்னும் ' + extra.length + ' notes குழு சேர்க்கவும் அல்லது சொற்களை நீக்கவும்.'));
+      } else {
+        issues.push(msg('warn', 'Words: ' + words.length + ', Note groups: ' + groups.length + ' (one group = the notes of one word). ' + (groups.length - words.length) + ' group(s) have no word. Add ' + (groups.length - words.length) + ' more word(s), or remove those groups.', 'notes குழுக்கள் அதிகம். இன்னும் ' + (groups.length - words.length) + ' சொல் சேர்க்கவும் அல்லது குழுக்களை நீக்கவும்.'));
+      }
+    }
+    var n = Math.max(words.length, groups.length);
+    var items = [];
+    var total = 0;
+    for(var i=0;i<n;i++){
+      var ns = parsed[i] || [];
+      items.push({word: words[i] || '', notes: ns.map(function(x){ return {num:x.num, label:x.label, oct:x.oct, rest:!!x.rest, err:!!x.err}; }), err: ns.some(function(x){ return x.err; })});
+      total += Math.max(1, ns.length);
+    }
+    if(total > MAXSLOTS) issues.push(msg('warn', 'This line has ' + total + ' slots. Boxes get small after ' + MAXSLOTS + '. Split it into two lines.', total + ' கட்டங்கள் உள்ளன. ' + MAXSLOTS + '-க்கு மேல் சிறிதாகும். இரண்டு வரிகளாகப் பிரிக்கவும்.'));
+    var hasError = issues.some(function(x){ return x.lvl === 'error'; });
+    if(!hasError && !issues.length) issues.push(msg('ok', 'This line is correct.', 'இந்த வரி சரியாக உள்ளது.'));
+    return {items:items, issues:issues, words:words, hasError:hasError};
+  }
+
+  function fixText(t){
+    return t.split(/\r?\n/).map(function(line){
+      var s = line.replace(/[｜¦│∣]/g,'|').replace(/[‘’ʼ]/g,"'").replace(/[／⁄∕]/g,'/').replace(/\|{2,}/g,'|');
+      var p = s.indexOf('|');
+      if(p < 0) return s.trim().replace(/\s+/g,' ');
+      var w = s.slice(0,p).trim().replace(/\s+/g,' ');
+      var n = s.slice(p+1).replace(/\|/g,' ');
+      n = n.replace(/\s*\/\s*/g,' / ');
+      n = n.replace(/([A-Ga-g][#b♯♭]?),(?=[A-Ga-g])/g,'$1 ');
+      var toks = n.trim().split(/\s+/).filter(Boolean);
+      var commaEnd = toks.filter(function(x){ return /,$/.test(x); }).length;
+      if(commaEnd >= 2) toks = toks.map(function(x){ return x.replace(/,+$/,''); });
+      toks = toks.map(function(x){ return x.replace(/([A-Ga-g])([#\u266F]|[b\u266D])?(['\u2019,]*)/g, function(m0,l,ac,oc){ return l.toUpperCase() + (ac || '') + (oc || ''); }); });
+      return (w ? w + ' ' : '') + '| ' + toks.join(' ');
+    }).join('\n');
+  }
+
+  if(typeof document === 'undefined'){ module.exports = {analyse:analyse, fixText:fixText}; return; }
+
+  function draw(cv, title, items, mark){
+    mark = mark || {};
+    var W = 1200, H = 860;
+    cv.width = W; cv.height = H;
+    var c = cv.getContext('2d');
+    c.fillStyle = '#fff'; c.fillRect(0,0,W,H);
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    var used = {};
+    items.forEach(function(it){ it.notes.forEach(function(n){ if(n.num) used[n.num] = true; }); });
+    c.fillStyle = '#2C2C2A'; c.font = 'bold 32px ' + FONT;
+    c.fillText(title, W/2, 45, W-60);
+    function keyMark(kx, ky, kw2, kh2, num){
+      if(mark.curNum === num){ c.save(); c.setLineDash([10,6]); c.strokeStyle = '#BA7517'; c.lineWidth = 6; c.strokeRect(kx+5, ky+5, kw2-10, kh2-10); c.restore(); }
+      if(mark.heard === num){ c.save(); c.strokeStyle = '#D85A30'; c.lineWidth = 8; c.strokeRect(kx+4, ky+4, kw2-8, kh2-8); c.restore(); }
+    }
+    var x0 = 60, kw = 154, top = 90, kh = 360;
+    [['C',1],['D',3],['E',5],['F',6],['G',8],['A',10],['B',12]].forEach(function(k,i){
+      var x = x0 + i*kw, on = !!used[k[1]];
+      c.fillStyle = on ? '#9FE1CB' : '#fff'; c.fillRect(x, top, kw, kh);
+      c.strokeStyle = '#555'; c.lineWidth = 3; c.strokeRect(x, top, kw, kh);
+      keyMark(x, top, kw, kh, k[1]);
+      c.fillStyle = on ? '#04342C' : '#888780';
+      c.font = 'bold 44px ' + FONT; c.fillText(String(k[1]), x+kw/2, top+kh-110);
+      c.font = '28px ' + FONT; c.fillText(k[0], x+kw/2, top+kh-55);
+    });
+    [[1,'C♯',2],[2,'D♯',4],[4,'F♯',7],[5,'G♯',9],[6,'A♯',11]].forEach(function(b){
+      var cx = x0 + b[0]*kw, on = !!used[b[2]];
+      c.fillStyle = on ? '#0F6E56' : '#2C2C2A'; c.fillRect(cx-45, top, 90, 220);
+      keyMark(cx-45, top, 90, 220, b[2]);
+      c.fillStyle = on ? '#fff' : '#888780';
+      c.font = 'bold 44px ' + FONT; c.fillText(String(b[2]), cx, top+75);
+      c.fillStyle = on ? '#E1F5EE' : '#888780';
+      c.font = '28px ' + FONT; c.fillText(b[1], cx, top+135);
+    });
+    var k = items.length;
+    if(!k) return;
+    var gap = k > 10 ? 8 : 12;
+    var totalCols = 0;
+    items.forEach(function(it){ totalCols += Math.max(1, it.notes.length); });
+    var u = Math.min(140, Math.floor((W-80-(k-1)*gap)/totalCols));
+    var sx = Math.round((W-(totalCols*u+(k-1)*gap))/2), y = 510;
+    var x = sx;
+    var hits = [];
+    items.forEach(function(it, ii){
+      var cols = Math.max(1, it.notes.length);
+      var bw = u*cols;
+      c.fillStyle = it.err ? '#FCEBEB' : '#E1F5EE'; c.fillRect(x, y, bw, 250);
+      c.strokeStyle = it.err ? '#A32D2D' : '#0F6E56'; c.lineWidth = 3; c.strokeRect(x, y, bw, 250);
+      var fs = bw >= 120 ? 40 : 30;
+      c.fillStyle = '#04342C'; c.font = 'bold ' + fs + 'px ' + FONT;
+      while(c.measureText(it.word).width > bw-14 && fs > 12){ fs--; c.font = 'bold ' + fs + 'px ' + FONT; }
+      c.fillText(it.word, x+bw/2, y+50);
+      c.strokeStyle = '#888780'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(x+12, y+95); c.lineTo(x+bw-12, y+95); c.stroke();
+      var ns = u >= 120 ? 52 : 40;
+      for(var j=0;j<cols;j++){
+        var nt = it.notes[j] || {num:null, label:'', oct:'', rest:false, err:false};
+        var cx = x + u*j + u/2;
+        var mk = ii + ':' + j;
+        if(mark.done && mark.done[mk]){ c.fillStyle = '#5DCAA5'; c.fillRect(x+u*j+3, y+100, u-6, 145); }
+        else if(mark.skipped && mark.skipped[mk]){ c.fillStyle = '#D3D1C7'; c.fillRect(x+u*j+3, y+100, u-6, 145); }
+        else if(mark.cur === mk){ c.fillStyle = '#FAC775'; c.fillRect(x+u*j+3, y+100, u-6, 145); c.strokeStyle = '#BA7517'; c.lineWidth = 4; c.strokeRect(x+u*j+3, y+100, u-6, 145); }
+        if(nt.num || nt.rest) hits.push({x:x+u*j, w:u, i:ii, j:j});
+        if(j > 0){
+          c.strokeStyle = '#9FE1CB'; c.lineWidth = 2;
+          c.beginPath(); c.moveTo(x+u*j, y+105); c.lineTo(x+u*j, y+240); c.stroke();
+        }
+        c.font = 'bold ' + ns + 'px ' + FONT;
+        c.fillStyle = nt.err ? '#A32D2D' : '#04342C';
+        c.fillText(nt.err ? '?' : (nt.num ? String(nt.num) : (nt.rest ? '-' : '')), cx, y+165);
+        c.fillStyle = '#444441'; c.font = '28px ' + FONT;
+        c.fillText(nt.label + (nt.oct ? ' ' + nt.oct : ''), cx, y+220);
+        if(mark.done && mark.done[mk]){ c.fillStyle = '#04342C'; c.font = 'bold 26px ' + FONT; c.fillText('\u2713', x+u*j+u-20, y+118); }
+      }
+      x += bw + gap;
+    });
+    var nums = items.map(function(it){
+      return it.notes.length ? it.notes.map(function(n){ return n.num ? n.num : '-'; }).join(' ') : '-';
+    }).join(' - ');
+    var f = 32; c.fillStyle = '#085041'; c.font = 'bold ' + f + 'px ' + FONT;
+    var txt = 'Numbers: ' + nums;
+    while(c.measureText(txt).width > W-80 && f > 14){ f--; c.font = 'bold ' + f + 'px ' + FONT; }
+    c.fillText(txt, W/2, 810);
+    return hits;
+  }
+
+  var $ = function(id){ return document.getElementById(id); };
+  function setMsg(t, bad){ var el = document.getElementById('fixmsg'); el.textContent = t; el.className = bad ? 'bad' : ''; }
+  var out = $('out'), src = $('src'), ttl = $('title');
+  var valid = [];
+  var lastCleared = null;
+
+  function addMsgs(ul, issues){
+    issues.forEach(function(m){
+      var li = document.createElement('li'); li.className = m.lvl;
+      li.appendChild(document.createTextNode(m.en));
+      if(m.ta){ var s = document.createElement('span'); s.className = 'ta'; s.textContent = m.ta; li.appendChild(s); }
+      ul.appendChild(li);
+    });
+  }
+
+  function slotsView(res){
+    var wrap = document.createElement('div'); wrap.className = 'slots';
+    var n = res.items.length;
+    for(var i=0;i<n;i++){
+      var it = res.items[i];
+      var slot = document.createElement('div'); slot.className = 'slot';
+      var a = document.createElement('div'); a.className = 'chip' + (it.word ? '' : ' miss'); a.textContent = it.word || '?';
+      var b = document.createElement('div');
+      var okNotes = it.notes.length > 0 && !it.err && it.notes.every(function(x){ return x.num || x.rest; });
+      b.className = 'chip n' + (okNotes ? '' : ' miss');
+      if(!it.notes.length) b.textContent = '?';
+      else b.textContent = it.notes.map(function(x){ return x.err ? x.label : (x.num ? x.label + ' = ' + x.num : (x.rest ? '-' : '?')); }).join(' · ');
+      slot.appendChild(a); slot.appendChild(b); wrap.appendChild(slot);
+    }
+    return wrap;
+  }
+
+  function save(cv, name){
+    var a = document.createElement('a');
+    a.download = name; a.href = cv.toDataURL('image/png');
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  function render(){
+    out.innerHTML = ''; valid = [];
+    var title = ttl.value.trim();
+    var lines = src.value.split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+    var okCount = 0, badCount = 0, anyError = false;
+    if(!lines.length){
+      $('summary').className = 'summary'; $('summary').textContent = 'Type at least one line. Example: Twin kle | C C   (ஒரு வரியாவது எழுதுங்கள்)';
+      src.className = ''; $('all').disabled = true; rebuildSeq(); return;
+    }
+    lines.forEach(function(line, idx){
+      var res = analyse(line);
+      var card = document.createElement('div'); card.className = 'card' + (res.hasError ? ' err' : '');
+      var h = document.createElement('h3'); h.textContent = 'Line ' + (idx+1);
+      var badge = document.createElement('span');
+      var warns = res.issues.some(function(x){ return x.lvl === 'warn'; });
+      badge.className = 'badge ' + (res.hasError ? 'error' : (warns ? 'warn' : 'ok'));
+      badge.textContent = res.hasError ? 'Needs fix' : (warns ? 'Check warning' : 'OK');
+      h.appendChild(badge); card.appendChild(h);
+      if(res.items.length) card.appendChild(slotsView(res));
+      var ul = document.createElement('ul'); ul.className = 'msgs'; addMsgs(ul, res.issues); card.appendChild(ul);
+      var cv = null;
+      if(res.items.length && !res.hasError){
+        cv = document.createElement('canvas'); card.appendChild(cv);
+        var ttxt = (title ? title + ' - ' : '') + 'Line ' + (idx+1) + ' (C = 1)';
+        var entry = {cv:cv, name:'line-' + (idx+1) + '.png', items:res.items, title:ttxt, lineNo:idx+1, done:{}, skipped:{}, hit:[]};
+        entry.hit = draw(cv, ttxt, res.items) || [];
+        cv.className = 'pick';
+        cv.addEventListener('click', function(ev){ onCanvasClick(entry, ev); });
+        valid.push(entry);
+        var row = document.createElement('div'); row.className = 'row';
+        var b = document.createElement('button'); b.textContent = 'Download this image';
+        b.onclick = function(){ saveEntry(entry); };
+        row.appendChild(b); card.appendChild(row);
+        okCount++;
+      } else {
+        var note = document.createElement('p'); note.className = 'hint';
+        note.textContent = 'Image is made after the red problems above are fixed. (மேலே உள்ள சிவப்புப் பிழைகளைச் சரிசெய்த பின் படம் வரும்.)';
+        card.appendChild(note);
+        badCount++; anyError = true;
+      }
+      out.appendChild(card);
+    });
+    var sm = $('summary');
+    sm.className = 'summary ' + (anyError ? 'bad' : 'ok');
+    sm.textContent = anyError ? (badCount + ' line(s) need a fix, ' + okCount + ' line(s) ready.') : ('All ' + okCount + ' line(s) are ready.');
+    src.className = anyError ? 'bad' : 'good';
+    $('all').disabled = !valid.length;
+    rebuildSeq();
+  }
+
+  var timer;
+  function later(){ clearTimeout(timer); timer = setTimeout(render, 300); }
+  src.addEventListener('input', function(){ setMsg(''); later(); });
+  ttl.addEventListener('input', later);
+  $('go').onclick = render;
+
+  $('fix').onclick = function(){
+    var before = src.value, after = fixText(before);
+    if(after === before){ setMsg('Nothing to fix automatically. Remaining problems need your correction (see red messages).'); }
+    else { src.value = after; setMsg('Spacing and symbols fixed. Please check the result below.'); }
+    render();
+  };
+
+  $('clear').onclick = function(){
+    if(!src.value && !ttl.value) return;
+    lastCleared = {src:src.value, title:ttl.value};
+    src.value = ''; ttl.value = '';
+    $('undo').textContent = 'Undo clear'; $('undo').hidden = false; setMsg('Cleared. You can press "Undo clear" to bring it back.');
+    render(); src.focus();
+  };
+  $('undo').onclick = function(){
+    if(!lastCleared) return;
+    src.value = lastCleared.src; ttl.value = lastCleared.title; lastCleared = null;
+    $('undo').hidden = true; setMsg('Restored.'); render();
+  };
+  $('example').onclick = function(){
+    src.value = EXAMPLE; ttl.value = 'Twinkle Twinkle'; setMsg('Example loaded (a public domain song).'); render();
+  };
+  $('all').onclick = function(){
+    valid.forEach(function(o,i){ setTimeout(function(){ saveEntry(o); }, i*400); });
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ins]'), function(b){
+    b.onclick = function(){
+      var s = src.selectionStart, e = src.selectionEnd, v = src.value, t = b.getAttribute('data-ins');
+      src.value = v.slice(0,s) + t + v.slice(e);
+      src.selectionStart = src.selectionEnd = s + t.length;
+      src.focus(); later();
+    };
+  });
+
+  function slug(t){
+    var x = (t || '').toLowerCase().replace(/[^a-z0-9஀-௿]+/g,'-').replace(/^-+|-+$/g,'');
+    return x || 'keyboard-notes';
+  }
+
+  $('save').onclick = function(){
+    if(!src.value.trim()){
+      setMsg('Nothing to download yet. Type at least one line first. (முதலில் ஒரு வரியாவது எழுதுங்கள்.)', true);
+      return;
+    }
+    var data = {
+      app: 'keyboard-notes-maker',
+      version: 1,
+      savedAt: new Date().toISOString(),
+      title: ttl.value,
+      src: src.value,
+      lines: src.value.split(/\r?\n/)
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = slug(ttl.value) + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    setMsg('Downloaded ' + a.download + '. Your lines and spaces are saved exactly. (சேமிக்கப்பட்டது.)');
+  };
+
+  $('load').onclick = function(){ $('file').click(); };
+
+  $('file').addEventListener('change', function(){
+    var inp = this, f = inp.files && inp.files[0];
+    if(!f) return;
+    function fail(en, ta){ setMsg(en + ' ' + ta + ' (Nothing was changed.)', true); inp.value = ''; }
+    if(f.size > 1000000){ fail('This file is too large (limit is 1 MB).', 'கோப்பு மிகப் பெரியது.'); return; }
+    if(!/\.json$/i.test(f.name) && f.type !== 'application/json'){ fail('Please choose a .json file saved from this page.', '.json கோப்பைத் தேர்ந்தெடுங்கள்.'); return; }
+    var r = new FileReader();
+    r.onerror = function(){ fail('The file could not be read.', 'கோப்பைப் படிக்க முடியவில்லை.'); };
+    r.onload = function(){
+      var text = String(r.result).replace(/^﻿/, ''), d;
+      try { d = JSON.parse(text); }
+      catch(e){ fail('This file is not valid JSON.', 'இது சரியான JSON கோப்பு இல்லை.'); return; }
+      if(!d || typeof d !== 'object' || Array.isArray(d)){ fail('The JSON must be an object with a "src" text.', 'JSON-ல் "src" text இருக்க வேண்டும்.'); return; }
+      if(d.version !== undefined && d.version !== 1){ fail('This file has an unsupported version (' + String(d.version) + ').', 'இந்தப் பதிப்பு ஆதரிக்கப்படவில்லை.'); return; }
+      var s = null;
+      if(typeof d.src === 'string') s = d.src;
+      else if(Array.isArray(d.lines) && d.lines.every(function(x){ return typeof x === 'string'; })) s = d.lines.join('\n');
+      if(s === null){ fail('This JSON has no "src" text (or "lines" list).', '"src" text இல்லை.'); return; }
+      if(d.title !== undefined && d.title !== null && typeof d.title !== 'string'){ fail('"title" must be text.', '"title" text ஆக இருக்க வேண்டும்.'); return; }
+      if(s.length > 200000){ fail('The lines text is too long.', 'text மிக நீளமாக உள்ளது.'); return; }
+      var t = typeof d.title === 'string' ? d.title : '';
+      if(src.value || ttl.value){
+        lastCleared = {src: src.value, title: ttl.value};
+        $('undo').textContent = 'Undo upload'; $('undo').hidden = false;
+      }
+      src.value = s; ttl.value = t;
+      var count = s.split(/\r?\n/).filter(function(x){ return x.trim(); }).length;
+      setMsg('Uploaded "' + f.name + '": ' + count + ' line(s) loaded exactly as saved. (ஏற்றப்பட்டது.)');
+      inp.value = '';
+      render();
+    };
+    r.readAsText(f);
+  });
+
+  function saveEntry(o){
+    var t = document.createElement('canvas');
+    draw(t, o.title, o.items);
+    save(t, o.name);
+  }
+
+  var NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  var follow = {active:false, listening:false, cursor:0, seq:[], heard:null, armed:true, wrong:false, thresh:0.01};
+  var audio = {ctx:null, stream:null, an:null, buf:null, timer:null};
+  var det = {cand:null, count:0, lastStable:null, silence:0, rmsHist:[]};
+
+  function markFor(e){
+    var cur = follow.seq[follow.cursor], isCur = !!cur && cur.e === e;
+    return {done:e.done, skipped:e.skipped, cur: isCur ? (cur.i + ':' + cur.j) : null, curNum: isCur ? cur.num : null, heard: isCur ? follow.heard : null};
+  }
+  function redraw(e){ e.hit = draw(e.cv, e.title, e.items, follow.active ? markFor(e) : null) || []; }
+  function redrawAll(){ valid.forEach(redraw); }
+
+  function updateStatus(){
+    var el = $('fstatus'), cur = follow.seq[follow.cursor];
+    if(!follow.seq.length){ el.textContent = 'Type at least one correct line, then press "Start listening". (முதலில் சரியான வரி எழுதுங்கள்.)'; return; }
+    if(!follow.active && !follow.listening){ el.textContent = 'Press "Start listening" and play the first note. (தொடங்க "Start listening" அழுத்தி முதல் note வாசிக்கவும்.)'; return; }
+    if(!cur){ el.textContent = 'Finished: all ' + follow.seq.length + ' notes done. Press Restart to play again. (முடிந்தது.)'; return; }
+    var t = (follow.listening ? 'Listening. ' : 'Stopped. ');
+    t += 'Heard: ' + (follow.heard ? NAMES[follow.heard-1] + ' (' + follow.heard + ')' : '-');
+    t += '. Next: ' + cur.label + ' (' + cur.num + ') - line ' + cur.e.lineNo + (cur.word ? ', "' + cur.word + '"' : '') + '.';
+    if(follow.wrong) t += ' That was not the next note. Try again. (அடுத்த note இல்லை.)';
+    el.textContent = t;
+  }
+
+  function setButtons(){
+    $('listen').disabled = follow.listening;
+    $('stopl').disabled = !follow.listening;
+  }
+
+  function ensureVisible(e){
+    if(!e) return;
+    var r = e.cv.getBoundingClientRect();
+    var bar = $('follow').getBoundingClientRect().height + 10;
+    if(r.top < bar || r.bottom > window.innerHeight - 10){ e.cv.scrollIntoView({behavior:'smooth', block:'center'}); }
+  }
+
+  function rebuildSeq(){
+    follow.seq = [];
+    valid.forEach(function(e){
+      e.items.forEach(function(it, i){
+        it.notes.forEach(function(n, j){
+          if(n.num) follow.seq.push({e:e, i:i, j:j, num:n.num, label:n.label, word:it.word});
+        });
+      });
+    });
+    follow.cursor = 0; follow.wrong = false; follow.heard = null;
+    updateStatus();
+    if(follow.active) redrawAll();
+  }
+
+  function setCursor(idx){
+    valid.forEach(function(e){ e.done = {}; e.skipped = {}; });
+    for(var k=0;k<idx && k<follow.seq.length;k++){ var s0 = follow.seq[k]; s0.e.done[s0.i + ':' + s0.j] = true; }
+    follow.cursor = idx; follow.armed = true; follow.wrong = false; follow.active = true;
+    redrawAll(); updateStatus();
+    var cur = follow.seq[idx];
+    if(cur) ensureVisible(cur.e);
+  }
+
+  function onCanvasClick(entry, ev){
+    var r = entry.cv.getBoundingClientRect(), sc = entry.cv.width / r.width;
+    var px = (ev.clientX - r.left) * sc, py = (ev.clientY - r.top) * sc;
+    if(py < 510 || py > 760) return;
+    for(var h=0; h<entry.hit.length; h++){
+      var ht = entry.hit[h];
+      if(px >= ht.x && px < ht.x + ht.w){
+        for(var k=0;k<follow.seq.length;k++){
+          var s1 = follow.seq[k];
+          if(s1.e === entry && s1.i === ht.i && s1.j === ht.j){ setCursor(k); setMsg('Position set. Play the highlighted note. (குறிக்கப்பட்ட note-ஐ வாசிக்கவும்.)'); return; }
+        }
+        return;
+      }
+    }
+  }
+
+  function detectPitch(buf, sr){
+    var n = buf.length, rms = 0, i, tau;
+    for(i=0;i<n;i++) rms += buf[i]*buf[i];
+    rms = Math.sqrt(rms/n);
+    if(rms < follow.thresh) return {rms:rms, freq:-1};
+    var half = Math.floor(n/2);
+    var minLag = Math.floor(sr/1200), maxLag = Math.min(Math.floor(sr/65), half-1);
+    var d = new Float32Array(maxLag+1);
+    for(tau=1; tau<=maxLag; tau++){
+      var sum = 0;
+      for(i=0;i<half;i++){ var df = buf[i]-buf[i+tau]; sum += df*df; }
+      d[tau] = sum;
+    }
+    var cm = new Float32Array(maxLag+1), run = 0; cm[0] = 1;
+    for(tau=1; tau<=maxLag; tau++){ run += d[tau]; cm[tau] = run ? d[tau]*tau/run : 1; }
+    var est = -1;
+    for(tau=minLag; tau<=maxLag; tau++){
+      if(cm[tau] < 0.15){ while(tau+1 <= maxLag && cm[tau+1] < cm[tau]) tau++; est = tau; break; }
+    }
+    if(est < 0) return {rms:rms, freq:-1};
+    var x0 = est > 1 ? cm[est-1] : cm[est], x2 = est < maxLag ? cm[est+1] : cm[est], x1 = cm[est];
+    var den = x0 + x2 - 2*x1, shift = den ? (x0 - x2) / (2*den) : 0;
+    return {rms:rms, freq: sr / (est + shift)};
+  }
+
+  function redrawCur(){
+    var cur = follow.seq[follow.cursor];
+    if(cur && follow.active) redraw(cur.e);
+  }
+
+  function tryMatch(num){
+    var cur = follow.seq[follow.cursor];
+    if(!cur) return;
+    var hit = -1, k;
+    if(cur.num === num) hit = 0;
+    else if($('ahead').checked){
+      for(k=1;k<=3;k++){ var sk = follow.seq[follow.cursor+k]; if(sk && sk.num === num){ hit = k; break; } }
+    }
+    if(hit < 0){ if(!follow.wrong){ follow.wrong = true; updateStatus(); } return; }
+    follow.wrong = false;
+    var prevE = cur.e;
+    for(k=0;k<hit;k++){ var s2 = follow.seq[follow.cursor+k]; s2.e.skipped[s2.i + ':' + s2.j] = true; }
+    var good = follow.seq[follow.cursor+hit];
+    good.e.done[good.i + ':' + good.j] = true;
+    follow.cursor += hit + 1; follow.armed = false;
+    var nxt = follow.seq[follow.cursor];
+    redrawAll(); updateStatus();
+    ensureVisible(nxt ? nxt.e : prevE);
+    if(!nxt) stopListening(true);
+  }
+
+  function onFrame(){
+    if(!audio.an) return;
+    audio.an.getFloatTimeDomainData(audio.buf);
+    var r = detectPitch(audio.buf, audio.ctx.sampleRate);
+    $('meterfill').style.width = Math.round(Math.min(1, r.rms/0.2)*100) + '%';
+    det.rmsHist.push(r.rms); if(det.rmsHist.length > 8) det.rmsHist.shift();
+    if(r.freq < 0){
+      det.silence++; det.cand = null; det.count = 0;
+      if(det.silence >= 3){
+        follow.armed = true; det.lastStable = null;
+        if(follow.heard !== null){ follow.heard = null; redrawCur(); updateStatus(); }
+      }
+      return;
+    }
+    det.silence = 0;
+    var midi = 69 + 12*Math.log2(r.freq/440), rr = Math.round(midi), cents = (midi-rr)*100;
+    if(Math.abs(cents) > 40){ det.cand = null; det.count = 0; return; }
+    var num = ((rr%12)+12)%12 + 1;
+    if(num === det.cand) det.count++; else { det.cand = num; det.count = 1; }
+    if(det.count < 5) return;
+    var minRecent = Math.min.apply(null, det.rmsHist);
+    if(!follow.armed && r.rms > minRecent*2.5 + follow.thresh) follow.armed = true;
+    if(num !== det.lastStable){ det.lastStable = num; follow.armed = true; }
+    if(follow.heard !== num){ follow.heard = num; redrawCur(); updateStatus(); }
+    if(follow.armed) tryMatch(num);
+  }
+
+  function micError(e){
+    var n = (e && e.name) || 'Error', m = (e && e.message) || '';
+    var tech = ' [Technical: ' + n + (m ? ': ' + m : '') + ' | page: ' + location.protocol + '//]';
+    if(!window.isSecureContext) return 'This page is not in a secure context, so the browser blocks the microphone. Open the file by double-clicking it on a computer (address starts with file:///C:/) or through localhost/https.' + tech;
+    if(n === 'NotAllowedError' || n === 'SecurityError'){
+      if(/system/i.test(m)) return 'Windows is blocking the microphone for the browser. Open Windows Settings > Privacy & security > Microphone, turn ON "Microphone access", "Let apps access your microphone" and "Let desktop apps access your microphone", then restart Chrome. (Windows அமைப்பில் Microphone அனுமதி தேவை.)' + tech;
+      return 'The browser denied the microphone. Click the icon left of the address bar > Microphone > Allow, then reload (F5) and press Start listening again. If it is already Allow, check Windows Settings > Privacy & security > Microphone. (Microphone அனுமதி தேவை.)' + tech;
+    }
+    if(n === 'NotReadableError') return 'The microphone is busy or blocked by another app or by Windows privacy settings. Close apps that use the microphone (Zoom, Teams, recorders), check Windows Settings > Privacy & security > Microphone, then try again. (Microphone வேறு app-ல் பயன்பாட்டில் உள்ளது.)' + tech;
+    if(n === 'NotFoundError') return 'No microphone was found. Check that a microphone is connected and selected as the default input in Windows Sound settings. (Microphone இல்லை.)' + tech;
+    return 'The microphone could not be started. Try the latest Chrome. (Microphone தொடங்கவில்லை.)' + tech;
+  }
+
+  function getMic(){
+    var rich = {audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}};
+    return navigator.mediaDevices.getUserMedia(rich).catch(function(e){
+      var n = e && e.name;
+      if(n === 'NotAllowedError' || n === 'SecurityError' || n === 'NotFoundError') throw e;
+      return navigator.mediaDevices.getUserMedia({audio:true});
+    });
+  }
+
+  function stopListening(done){
+    if(audio.timer){ clearInterval(audio.timer); audio.timer = null; }
+    if(audio.stream){ audio.stream.getTracks().forEach(function(t){ t.stop(); }); audio.stream = null; }
+    if(audio.ctx){ try{ audio.ctx.close(); }catch(e){} audio.ctx = null; }
+    audio.an = null;
+    follow.listening = false; follow.heard = null;
+    $('meterfill').style.width = '0%';
+    setButtons(); redrawAll(); updateStatus();
+  }
+
+  $('listen').onclick = function(){
+    if(follow.listening) return;
+    if(!follow.seq.length){ setMsg('Type at least one correct line first, then press Start listening. (முதலில் சரியான வரி எழுதுங்கள்.)', true); return; }
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      setMsg('This browser cannot use the microphone. Please use the latest Chrome. (Chrome பயன்படுத்தவும்.)', true); return;
+    }
+    getMic().then(function(stream){
+      audio.stream = stream;
+      audio.ctx = new AC();
+      var go = function(){
+        var node = audio.ctx.createMediaStreamSource(stream);
+        audio.an = audio.ctx.createAnalyser(); audio.an.fftSize = 2048;
+        node.connect(audio.an);
+        audio.buf = new Float32Array(audio.an.fftSize);
+        det.cand = null; det.count = 0; det.lastStable = null; det.silence = 0; det.rmsHist = [];
+        follow.listening = true; follow.active = true; follow.armed = true; follow.wrong = false;
+        if(follow.cursor >= follow.seq.length) follow.cursor = 0;
+        audio.timer = setInterval(onFrame, 30);
+        setButtons(); setMsg('Listening. Play the highlighted note. (கேட்கிறது.)');
+        setCursor(follow.cursor);
+      };
+      if(audio.ctx.state === 'suspended') audio.ctx.resume().then(go); else go();
+    }).catch(function(e){ setMsg(micError(e), true); });
+  };
+  $('stopl').onclick = function(){ stopListening(false); setMsg('Stopped listening.'); };
+  $('restart').onclick = function(){
+    if(!follow.seq.length){ updateStatus(); return; }
+    follow.heard = null; setCursor(0);
+    if(audio.an) follow.armed = true;
+    setMsg('Restarted from the first note. (முதலிலிருந்து தொடங்கியது.)');
+  };
+  $('skip').onclick = function(){
+    var cur = follow.seq[follow.cursor];
+    if(!cur) return;
+    cur.e.skipped[cur.i + ':' + cur.j] = true;
+    follow.cursor++; follow.armed = false; follow.wrong = false;
+    var nxt = follow.seq[follow.cursor];
+    follow.active = true; redrawAll(); updateStatus(); ensureVisible(nxt ? nxt.e : cur.e);
+    if(!nxt && follow.listening) stopListening(true);
+  };
+  $('sens').addEventListener('input', function(){
+    var v = Number(this.value);
+    follow.thresh = 0.002 + 0.05 * Math.pow(1 - v/100, 2);
+  });
+  $('sens').dispatchEvent(new Event('input'));
+
+  (function(){
+    var pad = $('tappad'), nm = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    nm.forEach(function(n,i){
+      var b = document.createElement('button');
+      b.className = n.indexOf('#')>-1 ? '' : 'sec';
+      b.style.minWidth = '48px'; b.textContent = n + ' ' + (i+1);
+      b.onclick = function(){
+        if(!follow.seq.length){ setMsg('Type at least one correct line first. (முதலில் சரியான வரி எழுதுங்கள்.)', true); return; }
+        if(!follow.active){
+          follow.active = true;
+          if(follow.cursor >= follow.seq.length) follow.cursor = 0;
+          setCursor(follow.cursor);
+        }
+        follow.heard = i+1; tryMatch(i+1);
+      };
+      pad.appendChild(b);
+    });
+  })();
+  setButtons();
+
+  src.value = EXAMPLE; ttl.value = 'Twinkle Twinkle';
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(render); } else { render(); }
+})();
+</script>
+</body>
+</html>
